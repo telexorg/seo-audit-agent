@@ -36,7 +36,7 @@ def get_agent_card(request: Request):
     external_base = request.headers.get("x-external-base-url", "")
     current_base_url = str(request.base_url).rstrip("/") + external_base
 
-    capabilities = AgentCapabilities(pushNotifications=True)
+    capabilities = AgentCapabilities(pushNotifications=True, streaming=True)
 
     skills = AgentSkill(
         id= "seo-audit",
