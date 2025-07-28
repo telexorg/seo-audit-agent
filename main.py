@@ -28,7 +28,7 @@ app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    return '<p style="font-size:30px">Web Scraper agent</p>'
+    return '<p style="font-size:30px">SEO agent</p>'
 
 
 @app.get("/.well-known/agent.json")
@@ -36,7 +36,7 @@ def get_agent_card(request: Request):
     external_base = request.headers.get("x-external-base-url", "")
     current_base_url = str(request.base_url).rstrip("/") + external_base
 
-    capabilities = AgentCapabilities(pushNotifications=True, streaming=True)
+    capabilities = AgentCapabilities(pushNotifications=True)
 
     skills = AgentSkill(
         id= "seo-audit",
@@ -55,7 +55,7 @@ def get_agent_card(request: Request):
         name='SEO Audit Agent',
         description='Audits Webpages for SEO issues',
         url=current_base_url,
-        version='1.0.0',
+        version='1.0.1',
         defaultInputModes=["text/plain"],
         defaultOutputModes=["text/plain"],
         capabilities=capabilities,

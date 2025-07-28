@@ -90,44 +90,48 @@ class AgentService:
     
     @classmethod
     async def audit_page_with_ai(cls, url, api_key):
-        html, final_url = cls.fetch_html(url)
+        html, _ = cls.fetch_html(url)
         if not html:
             return
         
         soup = BeautifulSoup(html, 'html.parser')
 
-        html = str(soup)
-        lines = html.splitlines()[:400]
-        first_500_lines = "\n".join(lines)
+        lines = str(soup).splitlines()
 
-        prompt = cls.create_prompt(first_500_lines)
+        chunks = []
+        for i in range(0, len(lines), 500):
+            chunk = "\n".join(lines[i:i+500])
+            chunks.append(chunk)
+            
 
-        report = await cls.ai_seo_analysis(prompt, api_key)
+        print(f"Will send request to AI {len(chunks)} times")
 
-        return report
+        reports = []
 
+        for chunk in chunks:
+            prompt = cls.create_prompt(chunk)
+
+            report = await cls.send_request_to_ai(prompt, api_key)
+
+            reports.append(report)
+
+
+        final_report_prompt = cls.get_final_report_prompt(reports)
+
+        final_report = await cls.send_request_to_ai(prompt=final_report_prompt, api_key=api_key)
+
+        return final_report
     
-    @classmethod
-    async def audit_page_with_ai_old(cls, url, api_key):
-        html, final_url = cls.fetch_html(url)
-        if not html:
-            return
-        
-        soup = BeautifulSoup(html, 'html.parser')
 
-        # 2. Find all <div> tags
-        tags_to_chunk = ['div']
-        div_tags = soup.body.find_all(tags_to_chunk)
+    def get_final_report_prompt(reports: list):
+        return f"""
+            As an SEO expert, summarize the list of SEO audit reports below, into one comprehensive report. 
 
-        # 3. Extract the text from each <div> to create chunks
-        chunks = [str(div) for div in div_tags]
-        print(chunks[0])
+            {reports}
 
-        prompt = cls.create_prompt(chunks[0])
+            return your result as a string summarizing the faults(if any), or highlighting improvements. If there are none, commend the SEO done on the website
+        """
 
-        report = await cls.ai_seo_analysis(prompt, api_key)
-
-        return report
     
     def create_prompt(html):
         return f"""
@@ -141,13 +145,12 @@ class AgentService:
         """
 
     # Step 3: Send to LLM
-    async def ai_seo_analysis(prompt, api_key):
+    async def send_request_to_ai(prompt, api_key):
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 request_headers = {
                     "X-AGENT-API-KEY": api_key,
-                    "X-MODEL": "google/gemini-2.5-flash-lite"
-                    # "X-MODEL": TELEX_AI_MODEL
+                    "X-MODEL": TELEX_AI_MODEL
                 }
 
                 request_body = {
@@ -174,8 +177,6 @@ class AgentService:
                 
                 res = response.json().get("data", {}).get("choices", None)[0].get("message", None)
                 reply = res.get("content", "not available")
-
-                print("REPLY:")
 
                 return reply
 
