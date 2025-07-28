@@ -39,12 +39,12 @@ def get_agent_card(request: Request):
     capabilities = AgentCapabilities(pushNotifications=True)
 
     skills = AgentSkill(
-        id= "scraping",
-        name= "Web Scraping",
-        description= "Responds to user input with meaningful related output.",
+        id= "seo-audit",
+        name= "SEO Auditing for webpages",
+        description= "Audits Webpages for SEO issues",
         inputModes= ["text"],
         outputModes= ["text"],
-        examples= []
+        tags=["seo", "seo-audit"]
     )
 
     provider = AgentProvider(
@@ -52,8 +52,8 @@ def get_agent_card(request: Request):
     )
 
     agent_card = AgentCard(
-        name='Web Scraper Agent',
-        description='Scrapes data from websites',
+        name='SEO Audit Agent',
+        description='Audits Webpages for SEO issues',
         url=current_base_url,
         version='1.0.0',
         defaultInputModes=["text/plain"],
@@ -72,7 +72,6 @@ async def handle_task(message:str, request_id, user_id:str, task_id: str, webhoo
   data = await AgentService.audit_page_with_ai(url=message, api_key=api_key)
 
   parts = a2a_types.TextPart(text=data)
-#   parts = a2a_types.DataPart(data=data)
 
   message = a2a_types.Message(messageId=uuid4().hex, role=a2a_types.Role.agent, parts=[parts])
 

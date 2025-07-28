@@ -99,7 +99,6 @@ class AgentService:
         html = str(soup)
         lines = html.splitlines()[:400]
         first_500_lines = "\n".join(lines)
-        # print(first_500_lines)
 
         prompt = cls.create_prompt(first_500_lines)
 
@@ -131,7 +130,6 @@ class AgentService:
         return report
     
     def create_prompt(html):
-        print("HTML IS:", html)
         return f"""
             You are an SEO expert. Based on the HTML content below, give an SEO audit of the page. 
             Look for missing meta tags, bad title structure, heading tag issues, alt tags, page speed concerns, or other common problems.
@@ -178,11 +176,6 @@ class AgentService:
                 reply = res.get("content", "not available")
 
                 print("REPLY:")
-                pprint(reply)
-                
-                # fixed_json = json_repair.repair_json(reply, return_objects=True)
-                # print('FIXED:')
-                # pprint(fixed_json)
 
                 return reply
 
