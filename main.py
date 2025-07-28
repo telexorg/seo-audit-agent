@@ -69,10 +69,10 @@ def get_agent_card(request: Request):
 
 async def handle_task(message:str, request_id, user_id:str, task_id: str, webhook_url: str, api_key: str, context_id: str):
 
-  data = AgentService.audit_page(url=message)
+  data = await AgentService.audit_page_with_ai(url=message, api_key=api_key)
 
-#   parts = a2a_types.TextPart(text=markdown)
-  parts = a2a_types.DataPart(data=data)
+  parts = a2a_types.TextPart(text=data)
+#   parts = a2a_types.DataPart(data=data)
 
   message = a2a_types.Message(messageId=uuid4().hex, role=a2a_types.Role.agent, parts=[parts])
 

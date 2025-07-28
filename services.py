@@ -1,8 +1,10 @@
-import os, httpx
+import os, httpx, json
 from dotenv import load_dotenv
+from fastapi import status, HTTPException
 import requests
+import json_repair
 from bs4 import BeautifulSoup
-import re
+from pprint import pprint
 from urllib.parse import urljoin, urlparse
 
 # Load environment variables from .env file
@@ -10,6 +12,8 @@ load_dotenv()
 
 TELEX_API_KEY = os.getenv('TELEX_API_KEY')
 TELEX_API_URL = os.getenv('TELEX_API_URL')
+TELEX_AI_URL = os.getenv('TELEX_AI_URL')
+TELEX_AI_MODEL = os.getenv('TELEX_AI_MODEL')
 
 class AgentService:
     def fetch_html(url):
@@ -83,3 +87,104 @@ class AgentService:
         report['sitemap.xml'] = 'Present' if sitemap_ok else 'Missing'
 
         return report
+    
+    @classmethod
+    async def audit_page_with_ai(cls, url, api_key):
+        html, final_url = cls.fetch_html(url)
+        if not html:
+            return
+        
+        soup = BeautifulSoup(html, 'html.parser')
+
+        html = str(soup)
+        lines = html.splitlines()[:400]
+        first_500_lines = "\n".join(lines)
+        # print(first_500_lines)
+
+        prompt = cls.create_prompt(first_500_lines)
+
+        report = await cls.ai_seo_analysis(prompt, api_key)
+
+        return report
+
+    
+    @classmethod
+    async def audit_page_with_ai_old(cls, url, api_key):
+        html, final_url = cls.fetch_html(url)
+        if not html:
+            return
+        
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # 2. Find all <div> tags
+        tags_to_chunk = ['div']
+        div_tags = soup.body.find_all(tags_to_chunk)
+
+        # 3. Extract the text from each <div> to create chunks
+        chunks = [str(div) for div in div_tags]
+        print(chunks[0])
+
+        prompt = cls.create_prompt(chunks[0])
+
+        report = await cls.ai_seo_analysis(prompt, api_key)
+
+        return report
+    
+    def create_prompt(html):
+        print("HTML IS:", html)
+        return f"""
+            You are an SEO expert. Based on the HTML content below, give an SEO audit of the page. 
+            Look for missing meta tags, bad title structure, heading tag issues, alt tags, page speed concerns, or other common problems.
+
+            HTML content:
+            {html}
+
+            return your result as a string summarizing the faults(if any), or highlighting improvements. If there are none, commend the SEO done on the website
+        """
+
+    # Step 3: Send to LLM
+    async def ai_seo_analysis(prompt, api_key):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                request_headers = {
+                    "X-AGENT-API-KEY": api_key,
+                    "X-MODEL": "google/gemini-2.5-flash-lite"
+                    # "X-MODEL": TELEX_AI_MODEL
+                }
+
+                request_body = {
+                    "model": "google/gemini-2.5-flash-lite",
+                    "messages": [
+                        {
+                        "role": "system",
+                        "content": prompt
+                        }
+                    ],
+                    "stream": False
+                }
+
+                print("sending request...")
+
+                response = await client.post(
+                    TELEX_AI_URL, 
+                    headers=request_headers,
+                    json=request_body,
+                    timeout=45.0
+                )
+
+                response.raise_for_status()
+                
+                res = response.json().get("data", {}).get("choices", None)[0].get("message", None)
+                reply = res.get("content", "not available")
+
+                print("REPLY:")
+                pprint(reply)
+                
+                # fixed_json = json_repair.repair_json(reply, return_objects=True)
+                # print('FIXED:')
+                # pprint(fixed_json)
+
+                return reply
+
+        except (KeyError, IndexError, json.JSONDecodeError, Exception) as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e)
