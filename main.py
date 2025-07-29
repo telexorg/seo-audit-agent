@@ -64,7 +64,9 @@ def get_agent_card(request: Request):
         documentationUrl=f"{current_base_url}/docs"
     )
 
-    return agent_card
+    card = AgentCard.model_dump(agent_card)
+
+    return card
 
 
 async def handle_task(message:str, request_id, user_id:str, task_id: str, webhook_url: str, api_key: str, context_id: str):
