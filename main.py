@@ -70,8 +70,12 @@ def get_agent_card(request: Request):
 
 
 async def handle_task(message:str, request_id, user_id:str, task_id: str, webhook_url: str, api_key: str, context_id: str):
+    
+  links = await AgentService.discover_links(start_url=message, max_pages=3)
+  print(links)
 
-  data = await AgentService.audit_page_with_ai(url=message, api_key=api_key)
+  data = await AgentService.audit_multiple_pages_with_ai(links=links, api_key=api_key)
+  pprint(data)
 
   parts = a2a_types.TextPart(text=data)
 

@@ -99,8 +99,8 @@ class AgentService:
         lines = str(soup).splitlines()
 
         chunks = []
-        for i in range(0, len(lines), 500):
-            chunk = "\n".join(lines[i:i+500])
+        for i in range(0, len(lines), 800):
+            chunk = "\n".join(lines[i:i+800])
             chunks.append(chunk)
             
 
@@ -109,7 +109,7 @@ class AgentService:
         reports = []
 
         for chunk in chunks:
-            prompt = cls.create_prompt(chunk)
+            prompt = cls.create_seo_audit_prompt(chunk)
 
             report = await cls.send_request_to_ai(prompt, api_key)
 
@@ -123,6 +123,80 @@ class AgentService:
         return final_report
     
 
+    @classmethod
+    async def audit_multiple_pages_with_ai(cls, links, api_key):
+        #send links to ai to check which ones to scrape and which ones to exclude for seo purposes
+        print("deduping links.....")
+        links_prompt = cls.deduplicate_links_prompt(links)
+
+        result: str = await cls.send_request_to_ai(prompt=links_prompt, api_key=api_key)
+
+        de_duped_links = result.split(",")
+
+        print("deduped links: ", de_duped_links)
+
+        collated_reports = []
+
+        print("auditing pages....")
+        for link in de_duped_links:
+            print(link)
+
+            page_report = await cls.audit_page_with_ai(url=link, api_key=api_key)
+
+            collated_reports.append(page_report)
+
+        audit_result =  "\n".join(collated_reports)
+        # join collated reports with ai
+        # print("collating reports...")
+        # collated_reports_prompt = cls.get_final_report_prompt(collated_reports)
+
+        # collated_reports_result = await cls.send_request_to_ai(prompt=collated_reports_prompt, api_key=api_key)
+
+        return audit_result
+    
+        
+    def deduplicate_links_prompt(links):
+        return f"""
+            You are an expert SEO analyst specializing in technical site audits. Your task is to analyze a list of URLs and identify a minimal set of unique page templates for an SEO audit.
+
+            Follow these rules for deduplication:
+            1.  **Identify URL Patterns:** Group URLs that follow the same structural pattern. For example, `/hotels/lagos`, `/hotels/kaduna`, and `/hotels/abuja` all share the `/hotels/[location]` pattern.
+            2.  **Keep One Representative:** From each group of patterns, keep only ONE representative URL. It doesn't matter which one you keep.
+            3.  **Handle Query Parameters:** For URLs with query parameters (e.g., `/search?q=item1`), keep only the base path (`/search`).
+            4.  **Remove Exact Duplicates:** If the same exact URL appears multiple times, keep only one.
+
+            **Example:**
+
+            Input Links:
+            [
+                "https://domain.com/",
+                "https://domain.com/about",
+                "https://domain.com/about",
+                "https://domain.com/hotels/lagos",
+                "https://domain.com/hotels/kaduna",
+                "https://domain.com/blog/post-1",
+                "https://domain.com/blog/post-2",
+                "https://domain.com/search?q=hotels",
+                "https://domain.com/search?q=flights"
+            ]
+
+            Ideal Output JSON:
+            [
+                "https://domain.com/",
+                "https://domain.com/about",
+                "https://domain.com/hotels/lagos",
+                "https://domain.com/blog/post-1",
+                "https://domain.com/search"
+            ]
+
+            ---
+
+            Now, perform this task on the following list of links:
+            {links}
+
+            Return the final list of deduplicated links as a comma separated string, with no other text or explanation.
+        """
+    
     def get_final_report_prompt(reports: list):
         return f"""
             As an SEO expert, summarize the list of SEO audit reports below, into one comprehensive report. 
@@ -133,7 +207,7 @@ class AgentService:
         """
 
     
-    def create_prompt(html):
+    def create_seo_audit_prompt(html):
         return f"""
             You are an SEO expert. Based on the HTML content below, give an SEO audit of the page. 
             Look for missing meta tags, bad title structure, heading tag issues, alt tags, page speed concerns, or other common problems.
@@ -154,7 +228,7 @@ class AgentService:
                 }
 
                 request_body = {
-                    "model": "google/gemini-2.5-flash-lite",
+                    "model": TELEX_AI_MODEL,
                     "messages": [
                         {
                         "role": "system",
@@ -164,7 +238,7 @@ class AgentService:
                     "stream": False
                 }
 
-                print("sending request...")
+                print("sending ai request...")
 
                 response = await client.post(
                     TELEX_AI_URL, 
@@ -182,3 +256,45 @@ class AgentService:
 
         except (KeyError, IndexError, json.JSONDecodeError, Exception) as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e)
+        
+
+    def is_internal_link(base_url, link):
+        # Only follow internal links (same domain)
+        parsed_base = urlparse(base_url)
+        parsed_link = urlparse(link)
+        return parsed_link.netloc == "" or parsed_link.netloc == parsed_base.netloc
+
+    @classmethod
+    async def discover_links(cls, start_url, max_pages=10):
+        visited = set()
+        to_visit = [start_url]
+        discovered_links = []
+
+        while to_visit and len(visited) < max_pages:
+            current_url = to_visit.pop(0)
+            if current_url in visited:
+                continue
+
+            try:
+                response = requests.get(current_url, timeout=10)
+                if 'text/html' not in response.headers.get('Content-Type', ''):
+                    continue
+
+                soup = BeautifulSoup(response.text, 'html.parser')
+                visited.add(current_url)
+                discovered_links.append(current_url)
+
+                for tag in soup.find_all('a', href=True):
+                    href = tag['href']
+                    absolute_link = urljoin(current_url, href)
+                    if (
+                        cls.is_internal_link(start_url, absolute_link)
+                        and absolute_link not in visited
+                        and absolute_link.startswith(("http://", "https://"))
+                    ):
+                        to_visit.append(absolute_link)
+
+            except requests.RequestException as e:
+                print(f"Failed to fetch {current_url}: {e}")
+
+        return list(set(discovered_links))
