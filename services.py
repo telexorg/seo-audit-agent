@@ -146,14 +146,14 @@ class AgentService:
 
             collated_reports.append(page_report)
 
-        audit_result =  "\n".join(collated_reports)
+        # audit_result =  "\n".join(collated_reports)
         # join collated reports with ai
-        # print("collating reports...")
-        # collated_reports_prompt = cls.get_final_report_prompt(collated_reports)
+        print("collating reports...")
+        collated_reports_prompt = cls.get_final_report_prompt(collated_reports)
 
-        # collated_reports_result = await cls.send_request_to_ai(prompt=collated_reports_prompt, api_key=api_key)
+        collated_reports_result = await cls.send_request_to_ai(prompt=collated_reports_prompt, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
 
-        return audit_result
+        return collated_reports_result
     
         
     def deduplicate_links_prompt(links):
