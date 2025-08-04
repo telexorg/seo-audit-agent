@@ -1,4 +1,5 @@
 import os, httpx
+from datetime import datetime
 from pprint import pprint
 import uvicorn, json
 from uuid import uuid4
@@ -74,7 +75,7 @@ async def handle_task(message:str, request_id, user_id:str, task_id: str, webhoo
   links = await AgentService.discover_links(start_url=message, max_pages=3)
   print(links)
 
-  data = await AgentService.audit_multiple_pages_with_ai(links=links, api_key=api_key)
+  data = await AgentService.audit_multiple_pages_with_ai(links=links, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
   pprint(data)
 
   parts = a2a_types.TextPart(text=data)
@@ -98,7 +99,9 @@ async def handle_task(message:str, request_id, user_id:str, task_id: str, webhoo
       result=task
   )
 
-  pprint(webhook_response.model_dump(exclude_none=True))
+  pprint(webhook_response.model_dump(exclude_none=True, mode='json'))
+  print("WEBHOOK URL: ", webhook_url)
+  print(api_key)
 
 
   async with httpx.AsyncClient() as client:
@@ -107,6 +110,7 @@ async def handle_task(message:str, request_id, user_id:str, task_id: str, webhoo
     pprint(is_sent.json())
 
   print("background done")
+  print("TASK END: ", datetime.now())
   return 
 
 
@@ -160,6 +164,9 @@ async def handle_request(request: Request, background_tasks: BackgroundTasks):
       status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
       detail="Message text cannot be empty."
     )
+  
+  print("TASK START: ", datetime.now())
+  # await handle_task(text_message, request_id, user_id, new_task.id, webhook_url, api_key, context_id)
 
   background_tasks.add_task(handle_task, text_message, request_id, user_id, new_task.id, webhook_url, api_key, context_id)
 
@@ -170,6 +177,7 @@ async def handle_request(request: Request, background_tasks: BackgroundTasks):
 
   response = response.model_dump(exclude_none=True)
   pprint(response)
+  print("TASK END: ", datetime.now())
   return response
 
 

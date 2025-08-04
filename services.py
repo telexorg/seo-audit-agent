@@ -6,6 +6,7 @@ import json_repair
 from bs4 import BeautifulSoup
 from pprint import pprint
 from urllib.parse import urljoin, urlparse
+import a2a.types as a2a_types
 
 # Load environment variables from .env file
 load_dotenv()
@@ -89,7 +90,7 @@ class AgentService:
         return report
     
     @classmethod
-    async def audit_page_with_ai(cls, url, api_key):
+    async def audit_page_with_ai(cls, url, api_key, webhook_url, task_id):
         html, _ = cls.fetch_html(url)
         if not html:
             return
@@ -104,32 +105,32 @@ class AgentService:
             chunks.append(chunk)
             
 
-        print(f"Will send request to AI {len(chunks)} times")
+        print(f"Will send request to AI {len(chunks)} time(s)")
 
         reports = []
 
         for chunk in chunks:
             prompt = cls.create_seo_audit_prompt(chunk)
 
-            report = await cls.send_request_to_ai(prompt, api_key)
+            report = await cls.send_request_to_ai(prompt, api_key, webhook_url=webhook_url, task_id=task_id)
 
             reports.append(report)
 
 
         final_report_prompt = cls.get_final_report_prompt(reports)
 
-        final_report = await cls.send_request_to_ai(prompt=final_report_prompt, api_key=api_key)
+        final_report = await cls.send_request_to_ai(prompt=final_report_prompt, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
 
         return final_report
     
 
     @classmethod
-    async def audit_multiple_pages_with_ai(cls, links, api_key):
+    async def audit_multiple_pages_with_ai(cls, links, api_key, webhook_url, task_id):
         #send links to ai to check which ones to scrape and which ones to exclude for seo purposes
         print("deduping links.....")
         links_prompt = cls.deduplicate_links_prompt(links)
 
-        result: str = await cls.send_request_to_ai(prompt=links_prompt, api_key=api_key)
+        result: str = await cls.send_request_to_ai(prompt=links_prompt, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
 
         de_duped_links = result.split(",")
 
@@ -141,7 +142,7 @@ class AgentService:
         for link in de_duped_links:
             print(link)
 
-            page_report = await cls.audit_page_with_ai(url=link, api_key=api_key)
+            page_report = await cls.audit_page_with_ai(url=link, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
 
             collated_reports.append(page_report)
 
@@ -216,10 +217,11 @@ class AgentService:
             {html}
 
             return your result as a string summarizing the faults(if any), or highlighting improvements. If there are none, commend the SEO done on the website
+            Your result should be a SHORT summary.
         """
 
     # Step 3: Send to LLM
-    async def send_request_to_ai(prompt, api_key):
+    async def send_request_to_ai(prompt, api_key, webhook_url, task_id=None):
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 request_headers = {
@@ -254,8 +256,20 @@ class AgentService:
 
                 return reply
 
-        except (KeyError, IndexError, json.JSONDecodeError, Exception) as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e)
+        except Exception as e:
+            print(e)
+            # send webhook error response
+            async with httpx.AsyncClient() as client:
+                headers = {"X-TELEX-API-KEY": api_key}
+                error = a2a_types.InternalError(
+                    message=e
+                )
+                response = a2a_types.JSONRPCErrorResponse(
+                    error=error,
+                    id=task_id or "not provided"
+                )
+                is_sent = await client.post(webhook_url, headers=headers,  json=webhook_response.model_dump(exclude_none=True, mode="json"))
+                pprint(is_sent.json())
         
 
     def is_internal_link(base_url, link):
