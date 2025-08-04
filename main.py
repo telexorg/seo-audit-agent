@@ -100,8 +100,6 @@ async def handle_task(message:str, request_id, user_id:str, task_id: str, webhoo
   )
 
   pprint(webhook_response.model_dump(exclude_none=True, mode='json'))
-  print("WEBHOOK URL: ", webhook_url)
-  print(api_key)
 
 
   async with httpx.AsyncClient() as client:
@@ -177,7 +175,6 @@ async def handle_request(request: Request, background_tasks: BackgroundTasks):
 
   response = response.model_dump(exclude_none=True)
   pprint(response)
-  print("TASK END: ", datetime.now())
   return response
 
 

@@ -140,7 +140,7 @@ class AgentService:
 
         print("auditing pages....")
         for link in de_duped_links:
-            print(link)
+            print("LINK: ", link)
 
             page_report = await cls.audit_page_with_ai(url=link, api_key=api_key, webhook_url=webhook_url, task_id=task_id)
 
@@ -239,8 +239,6 @@ class AgentService:
                     ],
                     "stream": False
                 }
-
-                pprint(request_body)
 
                 print("sending ai request...")
 
