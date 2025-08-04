@@ -262,14 +262,14 @@ class AgentService:
             async with httpx.AsyncClient() as client:
                 headers = {"X-TELEX-API-KEY": api_key}
                 error = a2a_types.InternalError(
-                    message=e
+                    message=str(e)
                 )
                 response = a2a_types.JSONRPCErrorResponse(
                     error=error,
                     id=task_id or "not provided"
                 )
-                is_sent = await client.post(webhook_url, headers=headers,  json=webhook_response.model_dump(exclude_none=True, mode="json"))
-                pprint(is_sent.json())
+                error_is_sent = await client.post(webhook_url, headers=headers,  json=response.model_dump(exclude_none=True, mode="json"))
+                pprint(error_is_sent.json())
         
 
     def is_internal_link(base_url, link):
