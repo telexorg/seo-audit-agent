@@ -240,6 +240,8 @@ class AgentService:
                     "stream": False
                 }
 
+                pprint(request_body)
+
                 print("sending ai request...")
 
                 response = await client.post(
